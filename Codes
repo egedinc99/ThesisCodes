@@ -149,9 +149,8 @@ for (q in player_questions) {
             max.words = 40,
             random.order = FALSE,
             colors = brewer.pal(8, "Dark2"),
-            scale = c(5,0.5))  # Change scale to make words appear closer together
-  
-  title(main = q)  # Add question as title
+            scale = c(5,0.5))  
+  title(main = q)  
   
   # Print a line to separate the output of each question
   print("-----------------------------------------------------")
