@@ -1,0 +1,508 @@
+Codes For Descriptive Analysis; DATA 1 (SURVEY RESPONSES)
+# Clear the environment
+rm(list = ls(all.names = TRUE))
+
+# Load necessary libraries
+library(readxl)
+library(tidyverse)
+library(tidytext)
+library(stringr)
+
+# Read the data
+df <- read_xlsx("Survey Results 1.xlsx")
+
+#Sentiment Analysis
+
+# List of open-ended questions
+questions <- c("3) How would you describe your drafting strategy in NBA Fantasy leagues?",
+               "4) What factors are most important to you when choosing players for your fantasy team?",
+               "14) What factors do you think are very important when making trade?",
+               "15) What words would you see in the forums or news you read that affect your opinion of that player?")
+
+# Initialize an empty data frame to store sentiment summaries
+sentiment_summaries <- data.frame(Question = character(),
+                                  Sentiment = numeric())
+# Initialize an empty data frame to store cleaned responses
+data_clean <- data.frame(question = character(),
+                         word = character())
+
+# Initialize an empty list to store sentiment summaries for each question
+sentiment_summaries_list <- list()
+
+# Analyze each question
+for (q in questions) {
+  
+  # Print the current question
+  print(paste("Analyzing question:", q))
+  
+  # Lowercase the responses
+  df[[q]] <- str_to_lower(df[[q]])
+  
+  # Tokenize the responses
+  tidy_responses <- df %>%
+    unnest_tokens(word, !!q)
+  
+  # Remove punctuation
+  tidy_responses$word <- str_remove_all(tidy_responses$word, "[[:punct:]]")
+  
+  # Remove stopwords
+  data_clean <- tidy_responses %>%
+    anti_join(stop_words)
+  
+  # Perform sentiment analysis with the Bing lexicon
+  sentiments <- data_clean %>%
+    inner_join(get_sentiments("bing"))
+  
+  # Convert sentiment to numeric
+  sentiments$sentiment <- ifelse(sentiments$sentiment == "positive", 1,
+                                 ifelse(sentiments$sentiment == "negative", -1, 0))
+  
+  # Add question column
+  sentiments$question <- q
+  
+  # Summarize sentiment
+  sentiment_summary <- sentiments %>%
+    summarise(sentiment = sum(sentiment))
+  
+  # Add to sentiment_summaries data frame
+  sentiment_summaries <- rbind(sentiment_summaries,
+                               data.frame(Question = q, Sentiment = sentiment_summary$sentiment))
+  
+  # Now you can summarize the sentiments by question
+  sentiments_summary_by_question <- sentiments %>%
+    group_by(question, word, sentiment) %>%
+    summarise(n = n()) %>%
+    arrange(question, desc(n))
+  print(sentiments_summary_by_question)
+  
+  # Add to sentiment_summaries_list
+  sentiment_summaries_list[[q]] <- sentiments_summary_by_question
+}
+
+# Define a mapping of original question names to shorter names for the plot
+question_names <- c("3) How would you describe your drafting strategy in NBA Fantasy leagues?" = "Question 3",
+                    "4) What factors are most important to you when choosing players for your fantasy team?" = "Question 4",
+                    "14) What factors do you think are very important when making trade?" = "Question 14",
+                    "15) What words would you see in the forums or news you read that affect your opinion of that player?" = "Question 15")
+
+# Plot sentiment scores
+ggplot(sentiment_summaries, aes(x = Question, y = Sentiment, fill = Sentiment > 0)) +
+  geom_bar(stat = "identity") +
+  scale_x_discrete(labels=question_names)+
+  geom_text(aes(label=Sentiment), vjust=-0.3, size=3.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Sentiment Analysis of Survey Responses", x = "Question", y = "Sentiment Score")
+
+
+# Display sentiment summary for the first question
+for (q in questions) {
+  print(sentiment_summaries_list[[q]])
+  View(sentiment_summaries_list[[q]])
+  }
+#-------------------------------------------------------------------------------------------
+#WordClouds
+
+# Load necessary libraries
+library(wordcloud)
+
+# Questions with player names
+player_questions <- c("11) Who is your favorite active player in NBA?",
+                      "12) Who are the players you definitely try to recruit into your team in the nba fantasy leagues?")
+oh_questions <- c("3) How would you describe your drafting strategy in NBA Fantasy leagues?",
+                  "4) What factors are most important to you when choosing players for your fantasy team?",
+                  "14) What factors do you think are very important when making trade?",
+                  "15) What words would you see in the forums or news you read that affect your opinion of that player?")
+
+# Standardize player names
+standardize_names <- function(name) {
+  name <- str_replace_all(name, "steph curry", "stephen curry")
+  name <- str_replace_all(name, "Nikola Jokic", "Jokic")
+  name <- str_replace_all(name, "Jokic", "Nikola Jokic")
+  name<- str_replace_all (name, "lebron baba", "Lebron James")
+  name<- str_replace_all (name, "kessler", "Walker Kessler")
+  return(name)
+}
+
+# Analyze each question for player names
+for (q in player_questions) {
+  
+  # Print the current question
+  print(paste("Analyzing question:", q))
+  
+  # Extract responses
+  responses <- df[[q]]
+  
+  # Standardize player names
+  responses <- sapply(responses, standardize_names)
+  
+  # Lowercase the responses
+  responses <- tolower(responses)
+  
+  # Split on commas and trim whitespace
+  player_names <- str_trim(unlist(strsplit(responses, ",")))
+  
+  # Count the words
+  word_counts <- table(player_names)
+  word_counts <- data.frame(word = names(word_counts), n = as.integer(word_counts))
+  
+  # Print a word cloud
+  set.seed(1234)  # For reproducibility
+  wordcloud(words = word_counts$word,
+            freq = word_counts$n,
+            min.freq = 3,
+            max.words = 40,
+            random.order = FALSE,
+            colors = brewer.pal(8, "Dark2"),
+            scale = c(5,0.5))  # Change scale to make words appear closer together
+  
+  title(main = q)  # Add question as title
+  
+  # Print a line to separate the output of each question
+  print("-----------------------------------------------------")
+}
+
+
+# Analyze each open-handed question
+for (q in oh_questions) {
+  
+  # Print the current question
+  print(paste("Analyzing question:", q))
+  
+  # Extract responses
+  responses <- data.frame(text = df[[q]])
+  
+  # Tokenize by word
+  wordsused <- responses %>%
+    unnest_tokens(word, text)
+  
+  # Remove stopwords
+  wordsused <- wordsused %>%
+    anti_join(stop_words)
+  
+  # Count the words
+  word_counts1 <- wordsused %>%
+    count(word) %>%
+    rename(n = n)
+  
+  # Print a word cloud
+  set.seed(1234)  # For reproducibility
+  wordcloud(words = word_counts1$word,
+            freq = word_counts1$n,
+            min.freq = 2,
+            max.words = 400,
+            random.order = FALSE,
+            colors = brewer.pal(8, "Dark2"),
+            scale = c(5,0.5))  # Change scale to make words appear closer together
+  
+  title(main = q)  # Add question as title
+  
+  # Print a line to separate the output of each question
+  print("-----------------------------------------------------")
+}
+
+
+#------------------------------------------------------------------------------------------------
+
+#Topic Modelling
+
+# Load necessary libraries
+library(topicmodels)
+library(SnowballC)
+
+# List of open-ended questions
+questions <- c("3) How would you describe your drafting strategy in NBA Fantasy leagues?",
+               "4) What factors are most important to you when choosing players for your fantasy team?",
+               "14) What factors do you think are very important when making trade?",
+               "15) What words would you see in the forums or news you read that affect your opinion of that player?")
+
+# Replace empty responses with "no_response"
+df[questions] <- lapply(df[questions], function(x) ifelse(x == "", "no_response", x))
+
+# For each question separately
+for (i in seq_along(questions)) {
+  q <- questions[i]
+  
+  # Print the current question
+  print(paste("Analyzing question:", q))
+  
+  # Lowercase the responses
+  df[[q]] <- str_to_lower(df[[q]])
+  
+  # Tokenize the responses
+  tidy_responses <- df %>%
+    unnest_tokens(word, !!q) %>%
+    mutate(question = q)  # Assign question column
+  
+  # Remove punctuation
+  tidy_responses$word <- str_remove_all(tidy_responses$word, "[[:punct:]]")
+  
+  # Remove stopwords
+  tidy_responses <- tidy_responses %>%
+    anti_join(stop_words)
+  
+  # Filter out rows where the word is a number
+  tidy_responses <- tidy_responses %>%
+    filter(!str_detect(word, "^\\d+$"))
+  
+  # Remove very common and very rare words
+  word_counts <- tidy_responses %>%
+    count(word) %>%
+    with(data.frame(word = word, freq = n)) 
+  tidy_responses <- semi_join(tidy_responses, subset(word_counts, freq > 5 & freq < 1000), by = "word")
+  
+  # Create a Document-Term Matrix (DTM)
+  dtm_q <- tidy_responses %>%
+    count(question, word) %>%
+    cast_dtm(document = question, term = word, value = n)
+  
+  # Fit the LDA model
+  lda_q <- LDA(dtm_q, k = 3)  # Here, k is the number of topics. You can adjust this based on your needs
+  
+  # Print the topics
+  lda_topics_q <- tidy(lda_q, matrix = "beta")
+  
+  top_terms <- lda_topics_q %>%
+    group_by(topic) %>%
+    top_n(10, beta) %>%
+    ungroup() %>%
+    arrange(topic, -beta)
+  
+  print(paste("Top terms for question:", q))
+  print(top_terms, n = 30)
+  
+  # Print frequency of words
+  word_freq <- tidy_responses %>% 
+    filter(word %in% top_terms$term) %>% 
+    count(word)
+  print("Word frequency:")
+  print(word_freq, n = nrow(word_freq))
+}
+
+
+#-------------------------------------------------------------------------
+#Descriptive Analysis
+
+# Convert years of experience to numerical data
+df$`1) How many years of experience do you have in NBA Fantasy leagues?` <- 
+  case_when(
+    df$`1) How many years of experience do you have in NBA Fantasy leagues?` == "1 year" ~ 1,
+    df$`1) How many years of experience do you have in NBA Fantasy leagues?` == "2-3 years" ~ 2.5,
+    df$`1) How many years of experience do you have in NBA Fantasy leagues?` == "4+ years" ~ 4
+  )
+
+# Descriptive Statistics for Numerical Variables
+num_vars <- c("1) How many years of experience do you have in NBA Fantasy leagues?",
+              "8) On a scale of 1 to 10, how emotionally attached are you to specific players on your fantasy team?")
+
+for (var in num_vars) {
+  print(paste("Descriptive statistics for:", var))
+  print(summary(df[[var]]))
+}
+
+# Frequency Distribution for Categorical Variables
+cat_vars <- c("2) How frequently do you participate in NBA Fantasy leagues (e.g., every season, occasionally)?",
+              "6) Which category do you usually focus on?",
+              "9) Have you ever made changes to your fantasy team based on sentiment or public opinion about a player?",
+              "10) How closely do you follow NBA news and updates related to player performance and injuries?",
+              "13) Do you actively engage with other fantasy league participants through online communities or forums?",
+              "16) Would you be interested in receiving personalized recommendations or insights based on sentiment analysis for your fantasy team?")
+
+for (var in cat_vars) {
+  print(paste("Frequency distribution for:", var))
+  print(table(df[[var]]))
+}
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Codes For Predictive Analysis ; DATA 2 (NBA FANTASY LEAGUE MATCHUP RESULTS)
+# Clear the environment
+rm(list = ls(all.names = TRUE))
+
+# Load the 'readxl' package
+library(readxl)
+library(dplyr)
+library(caret)
+
+
+# Load the data
+df <- read_xlsx("Model Format.xlsx")
+
+# View the first few rows of the data
+head(df)
+
+# Ensure the data is randomly shuffled
+set.seed(123)  # for reproducibility
+df <- df[sample(nrow(df)),]
+
+# Define the size of the training set
+train_size <- floor(0.8 * nrow(df))
+
+# Create the training set
+train_set <- df[1:train_size, ]
+
+# Create the validation set
+test_set <- df[(train_size + 1):nrow(df), ]
+
+
+train_set <- train_set[c(4:13)]
+test_set <- test_set[c(4:13)]
+colnames(train_set)[1] <- "field"
+colnames(train_set)[3] <- "free"
+colnames(test_set)[1] <- "field"
+colnames(test_set)[3] <- "free"
+colnames(test_set)[2] <- "three"
+colnames(train_set)[2] <- "three"
+
+columns <- c( "three" , "TRB", "AST", "STL", "BLK", "TOV", "PTS")
+train <- train_set %>%
+  mutate(across(all_of(columns),log))
+
+#------------------------------------------------------------------------------
+
+####Logistic Regression               
+lg <- glm(Decision~ field + three + free +TRB + AST +STL +BLK+TOV+PTS, data = train_set,family = binomial(link = logit))
+
+summary(lg)
+
+predictions<- predict(lg, test_set,type = "response")
+predictions
+predictions_test <- ifelse(predictions>0.55,1,0)
+predictions_test <- as.data.frame(predictions_test)
+confusion_logistic <-confusionMatrix(as.factor(predictions_test$predictions_test),as.factor(test_set$Decision),positive = "1")
+confusion_logistic
+
+#---------------------------------------------------------------------------------
+#Decision Tree
+
+library(rpart)
+library(rpart.plot)
+
+tree <- rpart(Decision~ field + three + free +TRB + AST +STL +BLK+TOV+PTS, data = train_set,method = "class")
+predictions_dt<- predict(tree, test_set,type = "class")
+confusion_decision <- confusionMatrix(predictions_dt,as.factor(test_set$Decision),positive = "1")
+
+# Visualize the tree
+rpart.plot(tree, extra=104)
+
+#Confusion Matrix
+confusion_decision
+
+
+#-------------------------------------------------------------------------------
+
+# Ridge Regression
+library(glmnet)
+
+# Preparing the data
+x_train <- model.matrix(Decision~., train_set)[,-1] # independent variables
+y_train <- train_set$Decision # dependent variable
+x_test <- model.matrix(Decision~., test_set)[,-1] # independent variables
+y_test <- test_set$Decision # dependent variable
+
+# Fitting the model
+cv_fit <- cv.glmnet(x_train, y_train, family="binomial", alpha=0, type.measure="class")
+best_lambda <- cv_fit$lambda.min # the lambda that gives minimum mean cross-validated error
+
+# Predictions
+preds_ridge <- predict(cv_fit, newx=x_test, s=best_lambda, type="class")
+
+# Confusion Matrix
+confusionMatrix(as.factor(preds_ridge), as.factor(y_test))
+
+#----------------------------------------------------------------------------
+
+# Random Forest
+library(randomForest)
+
+# Converting Decision to a factor
+train_set$Decision <- as.factor(train_set$Decision)
+test_set$Decision <- as.factor(test_set$Decision)
+
+# Fitting the model
+rf_fit <- randomForest(Decision~., data=train_set, ntree=500, mtry=2, importance=TRUE)
+
+# Predictions
+preds_rf <- predict(rf_fit, newdata=test_set)
+
+# Confusion Matrix
+confusionMatrix(preds_rf, as.factor(test_set$Decision))
+
+
+#------------------------------------------------------------------------------
+
+#KNN Model
+
+# K-Nearest Neighbors
+library(caret)
+
+# Define training control
+train_control <- trainControl(method="cv", number=10)
+
+# Train the model (we can use k=3 )
+model_knn <- train(Decision~., data=train_set, method="knn", trControl=train_control, preProcess = c("center", "scale"), tuneLength = 10)
+
+# Summarize the results
+print(model_knn)
+
+# Make predictions
+predictions_knn <- predict(model_knn, newdata=test_set)
+
+# Confusion Matrix
+confusionMatrix(predictions_knn, as.factor(test_set$Decision))
+
+# Load the 'vcd' package for visualizing the confusion matrix
+library(vcd)
+
+# Compute the confusion matrix
+cm <- confusionMatrix(predictions_knn, as.factor(test_set$Decision))
+
+# Plot the confusion matrix
+fourfoldplot(cm$table, color = c("red", "green"), conf.level = 0, margin = 1, main = "Confusion Matrix")
+
+# Add labels
+text(0.25, -0.25, labels = paste("True Positive\n", cm$table[1]))
+text(-0.25, -0.25, labels = paste("False Positive\n", cm$table[2]))
+text(0.25, 0.25, labels = paste("False Negative\n", cm$table[3]))
+text(-0.25, 0.25, labels = paste("True Negative\n", cm$table[4]))
+
+
+
+
+#-------------------------------------------------------------------------------
+
+# Lasso Regression
+library(glmnet)
+
+# Preparing the data
+x_train <- model.matrix(Decision~., train_set)[,-1] # independent variables
+y_train <- train_set$Decision # dependent variable
+x_test <- model.matrix(Decision~., test_set)[,-1] # independent variables
+y_test <- test_set$Decision # dependent variable
+
+# Fitting the model
+cv_fit <- cv.glmnet(x_train, y_train, family="binomial", alpha=1, type.measure="class")
+best_lambda <- cv_fit$lambda.min # the lambda that gives minimum mean cross-validated error
+
+# Predictions
+preds_lasso <- predict(cv_fit, newx=x_test, s=best_lambda, type="class")
+
+# Confusion Matrix
+confusionMatrix(as.factor(preds_lasso), as.factor(y_test))
+
+#-------------------------------------------------------------------------------
+
+# SVM
+library(e1071)
+
+# Fit the model
+svm_fit <- svm(Decision~., data=train_set, kernel="radial", cost=1)
+
+# Predictions
+preds_svm <- predict(svm_fit, newdata=test_set)
+
+# Confusion Matrix
+confusionMatrix(preds_svm, test_set$Decision)
+
+
+
