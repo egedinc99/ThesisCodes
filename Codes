@@ -29,7 +29,7 @@ data_clean <- data.frame(question = character(),
 # Initialize an empty list to store sentiment summaries for each question
 sentiment_summaries_list <- list()
 
-# Analyze each question
+# Analyze each question with neccessary data preprocessment
 for (q in questions) {
   
   # Print the current question
@@ -68,7 +68,7 @@ for (q in questions) {
   sentiment_summaries <- rbind(sentiment_summaries,
                                data.frame(Question = q, Sentiment = sentiment_summary$sentiment))
   
-  # Now you can summarize the sentiments by question
+  # Summarize the sentiments by question
   sentiments_summary_by_question <- sentiments %>%
     group_by(question, word, sentiment) %>%
     summarise(n = n()) %>%
@@ -94,11 +94,7 @@ ggplot(sentiment_summaries, aes(x = Question, y = Sentiment, fill = Sentiment > 
   labs(title = "Sentiment Analysis of Survey Responses", x = "Question", y = "Sentiment Score")
 
 
-# Display sentiment summary for the first question
-for (q in questions) {
-  print(sentiment_summaries_list[[q]])
-  View(sentiment_summaries_list[[q]])
-  }
+
 #-------------------------------------------------------------------------------------------
 #WordClouds
 
@@ -192,9 +188,9 @@ for (q in oh_questions) {
             max.words = 400,
             random.order = FALSE,
             colors = brewer.pal(8, "Dark2"),
-            scale = c(5,0.5))  # Change scale to make words appear closer together
+            scale = c(5,0.5))  
   
-  title(main = q)  # Add question as title
+  title(main = q) 
   
   # Print a line to separate the output of each question
   print("-----------------------------------------------------")
@@ -256,7 +252,7 @@ for (i in seq_along(questions)) {
     cast_dtm(document = question, term = word, value = n)
   
   # Fit the LDA model
-  lda_q <- LDA(dtm_q, k = 3)  # Here, k is the number of topics. You can adjust this based on your needs
+  lda_q <- LDA(dtm_q, k = 3) 
   
   # Print the topics
   lda_topics_q <- tidy(lda_q, matrix = "beta")
@@ -319,7 +315,7 @@ Codes For Predictive Analysis ; DATA 2 (NBA FANTASY LEAGUE MATCHUP RESULTS)
 # Clear the environment
 rm(list = ls(all.names = TRUE))
 
-# Load the 'readxl' package
+# Load the necessary packages
 library(readxl)
 library(dplyr)
 library(caret)
@@ -328,11 +324,10 @@ library(caret)
 # Load the data
 df <- read_xlsx("Model Format.xlsx")
 
-# View the first few rows of the data
 head(df)
 
 # Ensure the data is randomly shuffled
-set.seed(123)  # for reproducibility
+set.seed(123)  
 df <- df[sample(nrow(df)),]
 
 # Define the size of the training set
@@ -475,14 +470,14 @@ text(-0.25, 0.25, labels = paste("True Negative\n", cm$table[4]))
 library(glmnet)
 
 # Preparing the data
-x_train <- model.matrix(Decision~., train_set)[,-1] # independent variables
-y_train <- train_set$Decision # dependent variable
-x_test <- model.matrix(Decision~., test_set)[,-1] # independent variables
-y_test <- test_set$Decision # dependent variable
+x_train <- model.matrix(Decision~., train_set)[,-1] 
+y_train <- train_set$Decision
+x_test <- model.matrix(Decision~., test_set)[,-1]
+y_test <- test_set$Decision 
 
 # Fitting the model
 cv_fit <- cv.glmnet(x_train, y_train, family="binomial", alpha=1, type.measure="class")
-best_lambda <- cv_fit$lambda.min # the lambda that gives minimum mean cross-validated error
+best_lambda <- cv_fit$lambda.min 
 
 # Predictions
 preds_lasso <- predict(cv_fit, newx=x_test, s=best_lambda, type="class")
